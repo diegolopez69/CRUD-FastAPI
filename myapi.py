@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends
 from sqlalchemy import create_engine, Column, Integer, String
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 app = FastAPI()
 
@@ -36,7 +36,7 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
-# DB dependency (commit automático por request)
+# DB dependency
 def get_db():
     db = SessionLocal()
     try:
@@ -56,13 +56,12 @@ def alive():
 # Create a User
 @app.post("/users", response_model=UserResponse)
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
-    # validar duplicado por email
     if db.query(User).filter(User.email == user.email).first():
         raise HTTPException(status_code=409, detail="User already exists")
-    # crear usuario
+
     new_user = User(**user.dict())
     db.add(new_user)
-    db.flush()  # ← fuerza el INSERT y rellena new_user.id antes de devolverlo
+    db.flush()
     return new_user
 
 # Get all users
@@ -86,7 +85,6 @@ def update_user(user_id: int, data: UserCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User not found")
     for k, v in data.dict().items():
         setattr(user, k, v)
-    # no hace falta commit aquí porque lo hace get_db()
     return user
 
 # Delete User by ID
@@ -96,5 +94,4 @@ def delete_user(user_id: int, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     db.delete(user)
-    # commit lo hace get_db()
     return {"Message": f"User {user_id} deleted"}
